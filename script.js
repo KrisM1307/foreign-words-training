@@ -9,6 +9,8 @@ const examBtn = document.querySelector('#exam');
 const currentWord = document.querySelector('#current-word');
 const totalWord = document.querySelector('#total-word');
 const wordsProgress = document.querySelector('#words-progress');
+const examProgress = document.querySelector('#exam-progress');
+const correctPercent = document.querySelector('#correct-percent');
 const resultsModal = document.querySelector('.results-modal');
 const resultsContent = document.querySelector('.results-content');
 const template = document.querySelector('#word-stats');
@@ -26,11 +28,29 @@ let currentIndex = 0;
 let timerInterval;
 let elapsedTime = 0;
 let isStarted = false;
-let firstCard, secondCard;
+let selectedWord;
+let correctAnswers = 0;
+let attempts = {};
 
 function init() {
     totalWord.textContent = words.length;
     updateCard();
+    createDictionary();
+    initializeAttempts();
+};
+
+function createDictionary() {
+    dictionary = {};
+    words.forEach(word => {
+        dictionary[word.foreign] = word.translation;
+        dictionary[word.translation] = word.foreign;
+    });
+};
+
+function initializeAttempts() {
+    words.forEach(word => {
+        attempts[word.foreign] = 0;
+    });
 };
 
 function updateCard() {
@@ -114,6 +134,7 @@ function startExamMode() {
 
         card.addEventListener('click', () => {
             if (!card.classList.contains('correct') && !card.classList.contains('wrong')) {
+                attempts[word.foreign]++;
                 checkMatch(card);
             }
         });
@@ -128,8 +149,9 @@ function startExamMode() {
 
         card.addEventListener('click', () => {
             if (!card.classList.contains('correct') && !card.classList.contains('wrong')) {
+                attempts[word.foreign]++;
                 checkMatch(card);
-            };
+            }
         });
 
         examCards.append(card);
@@ -137,31 +159,24 @@ function startExamMode() {
 };
 
 function checkMatch(card) {
-    if (!firstCard) {
-        firstCard = card;
-        firstCard.classList.add('correct');
+    if (!selectedWord) {
+        selectedWord = card;
+        card.classList.add('correct');
     } else {
-        secondCard = card;
-
-        if (firstCard.translation === secondCard.foreign ||
-            firstCard.foreign === secondCard.translation) {
-            secondCard.classList.add('correct');
-            setTimeout(() => {
-                firstCard.classList.add('fade-out');
-                secondCard.classList.add('fade-out');
-                firstCard.classList.remove('correct');
-                secondCard.classList.remove('correct');
-                firstCard = null;
-                secondCard = null;
-                checkCompletion();
-            }, 500);
+        if (dictionary[selectedWord.textContent] === card.textContent) {
+            card.classList.add('correct');
+            selectedWord.classList.add('fade-out');
+            card.classList.add('fade-out');
+            correctAnswers++;
+            updateCorrectPercent();
+            selectedWord = null;
+            checkCompletion();
         } else {
-            secondCard.classList.add('wrong');
+            card.classList.add('wrong');
             setTimeout(() => {
-                firstCard.classList.remove('correct');
-                secondCard.classList.remove('wrong');
-                firstCard = null;
-                secondCard = null;
+                selectedWord.classList.remove('correct');
+                card.classList.remove('wrong');
+                selectedWord = null;
             }, 1000);
         }
     }
@@ -170,15 +185,35 @@ function checkMatch(card) {
 function checkCompletion() {
     const remainingCards = examCards.querySelectorAll('.card:not(.fade-out)');
     if (remainingCards.length === 0) {
-        clearInterval(timerInterval);
-        isStarted = false;
-        alert('Поздравляем! Вы успешно завершили проверку знаний.');
-        studyMode.classList.add('hidden');
-        examMode.classList.add('hidden');
-        studyCards.classList.add('hidden');
-        examCards.classList.add('hidden');
-        showResults();
+        setTimeout(() => {
+            clearInterval(timerInterval);
+            isStarted = false;
+            showNotification('Поздравляем! Вы успешно завершили проверку знаний!');
+            studyMode.classList.add('hidden');
+            studyCards.classList.add('hidden');
+            examCards.classList.add('hidden');
+            showResults();
+        }, 1000);
     }
+};
+
+function showNotification(message) {
+    const notification = document.createElement("div");
+    notification.classList.add('notification');
+    notification.textContent = message;
+    notification.classList.add('success');
+
+    document.body.append(notification);
+
+    setTimeout(() => {
+        notification.remove();
+    }, 5000);
+};
+
+function updateCorrectPercent() {
+    const percents = (correctAnswers / words.length) * 100;
+    correctPercent.textContent = `${percents}%`;
+    examProgress.value = percents;
 };
 
 function showResults() {
@@ -186,7 +221,7 @@ function showResults() {
     words.forEach(word => {
         const stats = template.content.cloneNode(true);
         stats.querySelector('.word span').textContent = word.foreign;
-        stats.querySelector('.attempts span').textContent = addLater;
+        stats.querySelector('.attempts span').textContent = attempts[word.foreign];
         resultsContent.append(stats);
     });
     timeResult.textContent = formatTime(elapsedTime);
